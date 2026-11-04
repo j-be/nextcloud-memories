@@ -13,6 +13,7 @@ import gallery.memories.data.remote.assets.ManifestVerifier
 import gallery.memories.data.remote.http.AuthState
 import gallery.memories.data.remote.http.HttpClients
 import gallery.memories.data.remote.http.NextcloudApi
+import gallery.memories.documents.MemoriesDocumentsProvider
 import gallery.memories.ui.theme.ThemeManager
 import io.github.g00fy2.versioncompare.Version
 
@@ -211,6 +212,7 @@ class AccountManager(
     fun storeCredentials(url: String, user: String, password: String, uid: String?) {
         store.saveCredentials(Credential(url = url, trustAll = auth.isTrustingAllCertificates, username = user, token = password, uid = uid))
         refreshCredentials()
+        MemoriesDocumentsProvider.notifyRootsChanged(activity)
     }
 
     /** Drops stored credentials and resets HTTP clients to the logged-out state. */
@@ -220,6 +222,7 @@ class AccountManager(
         auth.setAuthHeader(null)
         auth.build(null, false)
         clients.rebuild()
+        MemoriesDocumentsProvider.notifyRootsChanged(activity)
     }
 
     /** Reloads stored credentials into the HTTP clients. No-op when logged out. */
