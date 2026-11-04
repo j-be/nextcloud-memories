@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Memories\Tests\Unit;
 
 use OCA\Memories\Files\MemoriesMountProvider;
+use OCA\Memories\Files\MemoriesStorage;
 use OCA\Memories\Settings\SystemConfig;
 use OCA\Memories\Tests\TestCase;
 use OCP\App\IAppManager;
@@ -126,5 +127,36 @@ final class VirtualAlbumsConfigTest extends TestCase
 
         self::assertCount(1, $mounts);
         self::assertSame('/alice/files/Memories/Albums/', $mounts[0]->getMountPoint());
+    }
+
+    public function testVirtualStorageListsDirectoriesAndRejectsTraversal(): void
+    {
+        $storage = (new \ReflectionClass(MemoriesStorage::class))->newInstanceWithoutConstructor();
+        $files = new \ReflectionProperty(MemoriesStorage::class, 'fileIdsByPath');
+        $files->setValue($storage, ['Holiday/photo.jpg' => 42]);
+        $directories = new \ReflectionProperty(MemoriesStorage::class, 'directories');
+        $directories->setValue($storage, ['' => ['Holiday' => true], 'Holiday' => ['photo.jpg' => true]]);
+        $albumIds = new \ReflectionProperty(MemoriesStorage::class, 'albumIdsByPath');
+        $albumIds->setValue($storage, ['Holiday' => 1]);
+        $albumVersions = new \ReflectionProperty(MemoriesStorage::class, 'albumVersions');
+        $albumVersions->setValue($storage, ['Holiday' => ['count' => 1, 'update_id' => 1, 'mtime' => 123]]);
+        $loadedAlbums = new \ReflectionProperty(MemoriesStorage::class, 'loadedAlbums');
+        $loadedAlbums->setValue($storage, ['Holiday' => true]);
+        $albumsLoaded = new \ReflectionProperty(MemoriesStorage::class, 'albumsLoaded');
+        $albumsLoaded->setValue($storage, true);
+
+        $rootHandle = $storage->opendir('');
+        $albumHandle = $storage->opendir('Holiday');
+
+        self::assertSame('Holiday', readdir($rootHandle));
+        self::assertSame('photo.jpg', readdir($albumHandle));
+        closedir($rootHandle);
+        closedir($albumHandle);
+        self::assertSame('dir', $storage->filetype('Holiday'));
+        self::assertSame('file', $storage->filetype('Holiday/photo.jpg'));
+        self::assertFalse($storage->isUpdatable('Holiday/photo.jpg'));
+        self::assertFalse($storage->isDeletable('Holiday/photo.jpg'));
+        self::assertFalse($storage->file_exists('../photo.jpg'));
+        self::assertFalse($storage->opendir('../'));
     }
 }
