@@ -58,14 +58,16 @@ final class MemoriesMountProvider implements IMountProvider
         $relativePath = trim($mountPoint, '/');
         if ('' !== $relativePath) {
             try {
-                $this->rootFolder->getUserFolder($user->getUID())->get($relativePath);
-                $this->logger->warning('Virtual albums mountpoint is already occupied', [
-                    'app' => 'memories',
-                    'uid' => $user->getUID(),
-                    'mountpoint' => $mountPoint,
-                ]);
+                $node = $this->rootFolder->getUserFolder($user->getUID())->get($relativePath);
+                if (self::class !== $node->getMountPoint()->getMountProvider()) {
+                    $this->logger->warning('Virtual albums mountpoint is already occupied', [
+                        'app' => 'memories',
+                        'uid' => $user->getUID(),
+                        'mountpoint' => $mountPoint,
+                    ]);
 
-                return [];
+                    return [];
+                }
             } catch (\OCP\Files\NotFoundException) {
                 // No collision at this path, continue with mount.
             } catch (\Throwable $e) {

@@ -11,6 +11,8 @@ use OCP\App\IAppManager;
 use OCP\Config\IUserConfig;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use OCP\Files\Mount\IMountPoint;
+use OCP\Files\Node;
 use OCP\Files\NotFoundException;
 use OCP\Files\Storage\IStorageFactory;
 use OCP\IAppConfig;
@@ -91,6 +93,33 @@ final class VirtualAlbumsConfigTest extends TestCase
             ->with('alice')
             ->willReturn($folder)
         ;
+
+        $provider = new MemoriesMountProvider($systemConfig, $rootFolder, $this->createMock(LoggerInterface::class));
+        $mounts = $provider->getMountsForUser($user, $this->createMock(IStorageFactory::class));
+
+        self::assertCount(1, $mounts);
+        self::assertSame('/alice/files/Memories/Albums/', $mounts[0]->getMountPoint());
+    }
+
+    public function testMountProviderIgnoresItsOwnExistingMountDuringCollisionCheck(): void
+    {
+        $user = $this->createMock(IUser::class);
+        $user->method('getUID')->willReturn('alice');
+
+        $systemConfig = $this->createMock(SystemConfig::class);
+        $systemConfig->method('virtualAlbumsEnabled')->willReturn(true);
+        $systemConfig->method('getVirtualAlbumsMountpoint')->willReturn('/Memories/Albums/');
+
+        $mountPoint = $this->createMock(IMountPoint::class);
+        $mountPoint->method('getMountProvider')->willReturn(MemoriesMountProvider::class);
+        $node = $this->createMock(Node::class);
+        $node->method('getMountPoint')->willReturn($mountPoint);
+
+        $folder = $this->createMock(Folder::class);
+        $folder->method('get')->with('Memories/Albums')->willReturn($node);
+
+        $rootFolder = $this->createMock(IRootFolder::class);
+        $rootFolder->method('getUserFolder')->with('alice')->willReturn($folder);
 
         $provider = new MemoriesMountProvider($systemConfig, $rootFolder, $this->createMock(LoggerInterface::class));
         $mounts = $provider->getMountsForUser($user, $this->createMock(IStorageFactory::class));
