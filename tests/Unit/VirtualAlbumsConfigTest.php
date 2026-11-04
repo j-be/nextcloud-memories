@@ -18,6 +18,7 @@ use OCP\IConfig;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
+use Psr\Log\LoggerInterface;
 
 /**
  * @internal
@@ -88,9 +89,10 @@ final class VirtualAlbumsConfigTest extends TestCase
         $rootFolder->expects(self::once())
             ->method('getUserFolder')
             ->with('alice')
-            ->willReturn($folder);
+            ->willReturn($folder)
+        ;
 
-        $provider = new MemoriesMountProvider($systemConfig, $rootFolder);
+        $provider = new MemoriesMountProvider($systemConfig, $rootFolder, $this->createMock(LoggerInterface::class));
         $mounts = $provider->getMountsForUser($user, $this->createMock(IStorageFactory::class));
 
         self::assertCount(1, $mounts);

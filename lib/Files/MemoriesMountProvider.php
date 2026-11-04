@@ -10,18 +10,21 @@ declare(strict_types=1);
 
 namespace OCA\Memories\Files;
 
-use OCA\Memories\Settings\SystemConfig;
 use OC\Files\Mount\MountPoint;
+use OCA\Memories\Settings\SystemConfig;
 use OCP\Files\Config\IMountProvider;
 use OCP\Files\IRootFolder;
+use OCP\Files\Mount\IMountPoint;
 use OCP\Files\Storage\IStorageFactory;
 use OCP\IUser;
+use Psr\Log\LoggerInterface;
 
 final class MemoriesMountProvider implements IMountProvider
 {
     public function __construct(
         private readonly SystemConfig $systemConfig,
         private readonly IRootFolder $rootFolder,
+        private readonly LoggerInterface $logger,
     ) {}
 
     /**
@@ -31,24 +34,57 @@ final class MemoriesMountProvider implements IMountProvider
     public function getMountsForUser(IUser $user, IStorageFactory $loader): array
     {
         if (!$this->systemConfig->virtualAlbumsEnabled()) {
+            $this->logger->info('Virtual albums mount is disabled', [
+                'app' => 'memories',
+                'uid' => $user->getUID(),
+            ]);
+
             return [];
         }
 
-        $mountPoint = $this->normalizeMountPoint($this->systemConfig->getVirtualAlbumsMountpoint());
+        $configuredMountPoint = $this->systemConfig->getVirtualAlbumsMountpoint();
+        $mountPoint = $this->normalizeMountPoint($configuredMountPoint);
         if (null === $mountPoint) {
+            $this->logger->warning('Virtual albums mountpoint is invalid', [
+                'app' => 'memories',
+                'uid' => $user->getUID(),
+                'mountpoint' => $configuredMountPoint,
+            ]);
+
             return [];
         }
 
-        $fullPath = '/' . $user->getUID() . '/files' . $mountPoint;
+        $fullPath = '/'.$user->getUID().'/files'.$mountPoint;
         $relativePath = trim($mountPoint, '/');
         if ('' !== $relativePath) {
             try {
                 $this->rootFolder->getUserFolder($user->getUID())->get($relativePath);
+                $this->logger->warning('Virtual albums mountpoint is already occupied', [
+                    'app' => 'memories',
+                    'uid' => $user->getUID(),
+                    'mountpoint' => $mountPoint,
+                ]);
+
                 return [];
-            } catch (\Throwable) {
+            } catch (\OCP\Files\NotFoundException) {
                 // No collision at this path, continue with mount.
+            } catch (\Throwable $e) {
+                $this->logger->error('Failed to check virtual albums mountpoint availability', [
+                    'app' => 'memories',
+                    'uid' => $user->getUID(),
+                    'mountpoint' => $mountPoint,
+                    'exception' => $e,
+                ]);
+
+                return [];
             }
         }
+
+        $this->logger->info('Registering virtual albums mount', [
+            'app' => 'memories',
+            'uid' => $user->getUID(),
+            'mountpoint' => $mountPoint,
+        ]);
 
         return [
             new MountPoint(\OCA\Memories\Files\MemoriesStorage::class, $fullPath, [
@@ -60,7 +96,7 @@ final class MemoriesMountProvider implements IMountProvider
 
     public function normalizeMountPoint(string $mountPoint): ?string
     {
-        $trimmed = trim((string) $mountPoint, " \t\n\r\0\x0B/");
+        $trimmed = trim($mountPoint, " \t\n\r\0\x0B/");
         if ('' === $trimmed) {
             return null;
         }
@@ -76,6 +112,6 @@ final class MemoriesMountProvider implements IMountProvider
             }
         }
 
-        return '/' . implode('/', $parts) . '/';
+        return '/'.implode('/', $parts).'/';
     }
 }
