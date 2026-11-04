@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace OCA\Memories\AppInfo;
 
+use OCA\Memories\Files\MemoriesMountProvider;
 use OCA\Memories\Listeners\BeforeTemplateListener;
 use OCA\Memories\Listeners\PostDeleteListener;
 use OCA\Memories\Listeners\PostLogoutListener;
@@ -33,6 +34,7 @@ use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\Files\Config\IMountProviderCollection;
 use OCP\AppFramework\Http\Events\BeforeTemplateRenderedEvent;
 use OCP\Files\Events\Node\NodeCopiedEvent;
 use OCP\Files\Events\Node\NodeDeletedEvent;
@@ -133,7 +135,12 @@ final class Application extends App implements IBootstrap
     }
 
     #[\Override]
-    public function boot(IBootContext $context): void {}
+    public function boot(IBootContext $context): void
+    {
+        $context->injectFn(static function (IMountProviderCollection $mountProviderCollection, MemoriesMountProvider $provider): void {
+            $mountProviderCollection->registerProvider($provider);
+        });
+    }
 
     private function handleNativeHeaders(): void
     {

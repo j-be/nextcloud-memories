@@ -33,6 +33,10 @@ final class SystemConfig
         // Defaults to system temp directory if blank
         'memories.exiftool.tmp' => '',
 
+        // Enable a read-only virtual Files mount exposing all user-accessible Memories albums.
+        'memories.virtual_albums.enabled' => false,
+        'memories.virtual_albums.mountpoint' => '/Memories/Albums/',
+
         // How to index user directories
         // 0 = auto-index disabled
         // 1 = index everything
@@ -294,6 +298,24 @@ final class SystemConfig
                 ?? throw new \InvalidArgumentException("Invalid timeline path: {$path}"),
             explode(';', $paths),
         );
+    }
+
+    /** Check if virtual Memories albums are enabled globally. */
+    public function virtualAlbumsEnabled(): bool
+    {
+        return (bool) $this->config->getSystemValue('virtual_albums_enabled',
+            $this->config->getSystemValueBool('memories.virtual_albums.enabled', false),
+        );
+    }
+
+    /** Get the configured virtual Memories albums mountpoint. */
+    public function getVirtualAlbumsMountpoint(): string
+    {
+        $value = $this->config->getSystemValue('virtual_albums_mountpoint',
+            $this->config->getSystemValueString('memories.virtual_albums.mountpoint', '/Memories/Albums/'),
+        );
+
+        return is_string($value) && '' !== trim($value) ? $value : '/Memories/Albums/';
     }
 
     /** Check if albums are enabled for this user */
