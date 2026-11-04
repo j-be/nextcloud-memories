@@ -33,6 +33,18 @@ final class MemoriesStorage extends Local
 
         parent::__construct($parameters);
         $this->refreshVirtualTree();
+
+        try {
+            $this->getScanner()->scan('');
+        } catch (\Throwable $e) {
+            $this->logger->error('Failed to scan virtual albums storage', [
+                'app' => 'memories',
+                'uid' => $this->uid,
+                'mountpoint' => $this->mountpoint,
+                'directory' => $this->datadir,
+                'exception' => $e,
+            ]);
+        }
     }
 
     #[\Override]
