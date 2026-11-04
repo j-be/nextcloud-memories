@@ -248,7 +248,7 @@ final class MemoriesStorage extends Local
 
     private function normalizeVirtualName(string $name): string
     {
-        $name = preg_replace('/[\\\/]+/', '_', $name) ?? 'item';
+        $name = preg_replace('~[\\\/]+~', '_', $name) ?? 'item';
         $name = preg_replace('/[\x00-\x1F\x7F]+/', '', $name) ?? 'item';
         $name = trim($name, " \t\n\r\0\x0B.");
 
