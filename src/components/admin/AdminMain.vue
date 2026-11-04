@@ -26,6 +26,7 @@ import { provideAdminContext } from './admin-context';
 import Help from './sections/Help.vue';
 import Exif from './sections/Exif.vue';
 import Indexing from './sections/Indexing.vue';
+import VirtualAlbums from './sections/VirtualAlbums.vue';
 import FileSupport from './sections/FileSupport.vue';
 import Viewer from './sections/ViewerAdmin.vue';
 import Performance from './sections/Performance.vue';
@@ -47,6 +48,7 @@ const components = [
   markRaw(Help),
   markRaw(Exif),
   markRaw(Indexing),
+  markRaw(VirtualAlbums),
   markRaw(FileSupport),
   markRaw(Viewer),
   markRaw(Performance),

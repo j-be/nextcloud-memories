@@ -303,19 +303,13 @@ final class SystemConfig
     /** Check if virtual Memories albums are enabled globally. */
     public function virtualAlbumsEnabled(): bool
     {
-        return (bool) $this->config->getSystemValue('virtual_albums_enabled',
-            $this->config->getSystemValueBool('memories.virtual_albums.enabled', false),
-        );
+        return $this->get('memories.virtual_albums.enabled');
     }
 
     /** Get the configured virtual Memories albums mountpoint. */
     public function getVirtualAlbumsMountpoint(): string
     {
-        $value = $this->config->getSystemValue('virtual_albums_mountpoint',
-            $this->config->getSystemValueString('memories.virtual_albums.mountpoint', '/Memories/Albums/'),
-        );
-
-        return is_string($value) && '' !== trim($value) ? $value : '/Memories/Albums/';
+        return $this->get('memories.virtual_albums.mountpoint');
     }
 
     /** Check if albums are enabled for this user */

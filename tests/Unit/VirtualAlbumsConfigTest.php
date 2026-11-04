@@ -19,6 +19,11 @@ use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
 
+/**
+ * @internal
+ *
+ * @coversNothing
+ */
 final class VirtualAlbumsConfigTest extends TestCase
 {
     public function testVirtualAlbumSettingsHaveSafeDefaults(): void
@@ -40,6 +45,31 @@ final class VirtualAlbumsConfigTest extends TestCase
 
         self::assertFalse($systemConfig->virtualAlbumsEnabled());
         self::assertSame('/Memories/Albums/', $systemConfig->getVirtualAlbumsMountpoint());
+    }
+
+    public function testVirtualAlbumSettingsReadConfiguredValues(): void
+    {
+        $config = $this->createMock(IConfig::class);
+        $config->method('getSystemValue')->willReturnCallback(
+            static fn (string $key, mixed $default = null) => match ($key) {
+                'memories.virtual_albums.enabled' => true,
+                'memories.virtual_albums.mountpoint' => '/Shared/Albums/',
+                default => $default,
+            },
+        );
+
+        $systemConfig = new SystemConfig(
+            $config,
+            $this->createMock(IUserConfig::class),
+            $this->createMock(IRequest::class),
+            $this->createMock(IAppManager::class),
+            $this->createMock(IAppConfig::class),
+            $this->createMock(IUserSession::class),
+            $this->createMock(\OCP\Encryption\IManager::class),
+        );
+
+        self::assertTrue($systemConfig->virtualAlbumsEnabled());
+        self::assertSame('/Shared/Albums/', $systemConfig->getVirtualAlbumsMountpoint());
     }
 
     public function testMountProviderCreatesUserScopedAlbumsMount(): void

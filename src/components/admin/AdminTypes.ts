@@ -4,6 +4,8 @@ import type { IConfig } from '@typings';
 export type ISystemConfig = {
   'memories.exiftool': string;
   'memories.exiftool_no_local': boolean;
+  'memories.virtual_albums.enabled': boolean;
+  'memories.virtual_albums.mountpoint': string;
   'memories.index.mode': string;
   'memories.index.path': string;
   'memories.index.folder.blocklist': string[];
