@@ -1,9 +1,9 @@
 package gallery.memories.documents
 
+import android.content.Context
+import android.content.res.AssetFileDescriptor
 import android.database.Cursor
 import android.database.MatrixCursor
-import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Point
 import android.os.CancellationSignal
@@ -16,6 +16,7 @@ import gallery.memories.R
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
 
@@ -196,7 +197,7 @@ class MemoriesDocumentsProvider : DocumentsProvider() {
         return pipe[0]
     }
 
-    override fun openDocumentThumbnail(documentId: String, sizeHint: Point?, signal: CancellationSignal?): Bitmap {
+    override fun openDocumentThumbnail(documentId: String, sizeHint: Point?, signal: CancellationSignal?): AssetFileDescriptor {
         val ref = parseDocumentId(documentId)
         if (ref.type != TYPE_FILE) throw FileNotFoundException("Not a file")
         requireCurrentAccount(ref)
@@ -208,16 +209,19 @@ class MemoriesDocumentsProvider : DocumentsProvider() {
         }
         val target = maxOf(sizeHint?.x ?: 256, sizeHint?.y ?: 256, 256)
         val url = repository.previewUrl(file, target)
-        val request = Request.Builder().url(url)
+        val builder = Request.Builder().url(url)
             .header("User-Agent", "Memories")
-            .header("Authorization", repository.authHeader())
             .header("OCS-APIREQUEST", "true")
             .get()
-            .build()
+        repository.authHeader()?.let { builder.header("Authorization", it) }
+        val request = builder.build()
         val response = OkHttpClient().newCall(request).execute()
         if (!response.isSuccessful) throw FileNotFoundException("Preview failed: HTTP ${response.code}")
-        return response.body.byteStream().use { BitmapFactory.decodeStream(it) }
-            ?: throw FileNotFoundException("Preview decode failed")
+        val tmp = File.createTempFile("memories-thumb", ".bin", requireNotNull(context).cacheDir)
+        tmp.deleteOnExit()
+        response.body.byteStream().use { input -> tmp.outputStream().use { out -> input.copyTo(out) } }
+        val pfd = ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY)
+        return AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH)
     }
 
     private fun findAlbum(ref: DocumentRef): RemoteAlbum {

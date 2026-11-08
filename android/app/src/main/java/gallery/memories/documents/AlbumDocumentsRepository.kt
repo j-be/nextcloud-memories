@@ -89,8 +89,11 @@ internal class AlbumDocumentsRepository(context: Context) {
                     val photo = photos.getJSONObject(index)
                     val basename = photo.optString("basename")
                     val fileId = photo.getLong("fileid")
+                    val etag = photo.optString("etag")
                     files.add(
                         RemoteAlbumFile(
+                            fileId = fileId,
+                            etag = etag,
                             name = "$fileId-$basename",
                             displayName = basename,
                             mimeType = photo.optString("mimetype").ifBlank { "application/octet-stream" },
@@ -125,6 +128,9 @@ internal class AlbumDocumentsRepository(context: Context) {
             .appendQueryParameter("a", "1")
         return builder.build().toString()
     }
+
+    fun authHeader(): String? = auth.authHeader()
+
     private fun credential(): Credential {
         val current = credentials.getCredentials() ?: throw IOException("Sign in to Memories to browse albums")
         if (current != activeCredential) {
