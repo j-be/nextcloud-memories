@@ -2,7 +2,6 @@ package gallery.memories.documents
 
 import android.content.Context
 import android.net.Uri
-import android.util.Xml
 import gallery.memories.data.local.secure.Credential
 import gallery.memories.data.local.secure.SecureCredentialStore
 import gallery.memories.data.remote.assets.AssetCache
@@ -14,12 +13,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
-import org.xmlpull.v1.XmlPullParser
 import java.io.IOException
-import java.io.InputStream
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 internal data class RemoteAlbum(
@@ -74,23 +68,38 @@ internal class AlbumDocumentsRepository(context: Context) {
 
     fun files(album: RemoteAlbum): List<RemoteAlbumFile> {
         val current = credential()
-        val uid = current.uid ?: current.username
-        val albumType = if (album.owner == uid) "albums" else "sharedalbums"
-        val albumName = if (album.owner == uid) album.name else "${album.name} (${album.owner})"
-        val path = "/photos/${encodeSegment(uid)}/$albumType/${encodeSegment(albumName)}"
-        val body = """
-            <?xml version="1.0" encoding="utf-8"?>
-            <d:propfind xmlns:d="DAV:"><d:prop><d:displayname/><d:getcontenttype/><d:getcontentlength/><d:getlastmodified/><d:resourcetype/></d:prop></d:propfind>
-        """.trimIndent().toRequestBody("application/xml; charset=utf-8".toMediaType())
-        val request = request(davUrl(current.url, uid, path))
-            .header("Depth", "1")
-            .method("PROPFIND", body)
-            .build()
-
-        clients.client().newCall(request).execute().use { response ->
-            if (response.code != 207) throw IOException("Album contents failed: HTTP ${response.code}")
-            return parseFiles(response.body.byteStream())
+        val albumQuery = Uri.encode("${album.owner}/${album.name}")
+        val daysRequest = request("${current.url.trimEnd('/')}/api/days?albums=$albumQuery").get().build()
+        val dayIds = clients.client().newCall(daysRequest).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("Album days failed: HTTP ${response.code}")
+            val days = JSONArray(response.body.string())
+            List(days.length()) { days.getJSONObject(it).getLong("dayid") }
         }
+
+        val files = mutableListOf<RemoteAlbumFile>()
+        for (dayChunk in dayIds.chunked(40)) {
+            val path = dayChunk.joinToString(",")
+            val dayRequest = request("${current.url.trimEnd('/')}/api/days/$path?albums=$albumQuery").get().build()
+            clients.client().newCall(dayRequest).execute().use { response ->
+                if (!response.isSuccessful) throw IOException("Album photos failed: HTTP ${response.code}")
+                val photos = JSONArray(response.body.string())
+                for (index in 0 until photos.length()) {
+                    val photo = photos.getJSONObject(index)
+                    val basename = photo.optString("basename")
+                    val fileId = photo.getLong("fileid")
+                    files.add(
+                        RemoteAlbumFile(
+                            name = "$fileId-$basename",
+                            displayName = basename,
+                            mimeType = photo.optString("mimetype").ifBlank { "application/octet-stream" },
+                            size = photo.optLong("size"),
+                            lastModified = photo.optLong("epoch") * 1000,
+                        ),
+                    )
+                }
+            }
+        }
+        return files
     }
 
     fun openFileCall(album: RemoteAlbum, fileName: String): Call {
@@ -100,7 +109,7 @@ internal class AlbumDocumentsRepository(context: Context) {
         val albumName = if (album.owner == uid) album.name else "${album.name} (${album.owner})"
         val path = "/photos/${encodeSegment(uid)}/$albumType/${encodeSegment(albumName)}/${encodeSegment(fileName)}"
         val client = clients.client().newBuilder().readTimeout(60, TimeUnit.SECONDS).build()
-        return client.newCall(request(davUrl(current.url, uid, path)).get().build())
+        return client.newCall(request(davUrl(current.url, path)).get().build())
     }
 
     private fun credential(): Credential {
@@ -117,63 +126,12 @@ internal class AlbumDocumentsRepository(context: Context) {
 
     private fun request(url: String): Request.Builder = Request.Builder()
         .url(url)
-        .header("User-Agent", "Memories")
+        .header("User-Agent", "MemoriesNative")
         .header("Authorization", auth.authHeader() ?: "")
         .header("OCS-APIREQUEST", "true")
 
-    private fun davUrl(baseUrl: String, uid: String, path: String): String =
-        AssetCache.originOf(baseUrl) + AssetCache.webrootOf(baseUrl) +
-            "/remote.php/dav/files/${encodeSegment(uid)}" + path
+    private fun davUrl(baseUrl: String, path: String): String =
+        AssetCache.originOf(baseUrl) + AssetCache.webrootOf(baseUrl) + "/remote.php/dav" + path
 
     private fun encodeSegment(segment: String): String = Uri.encode(segment)
-
-    private fun parseFiles(input: InputStream): List<RemoteAlbumFile> {
-        val parser = Xml.newPullParser()
-        parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, true)
-        parser.setInput(input, null)
-        val files = mutableListOf<RemoteAlbumFile>()
-        var displayName = ""
-        var mimeType = ""
-        var size = 0L
-        var modified = 0L
-        var isCollection = false
-
-        while (parser.next() != XmlPullParser.END_DOCUMENT) {
-            when (parser.eventType) {
-                XmlPullParser.START_TAG -> when (parser.name) {
-                    "response" -> {
-                        displayName = ""
-                        mimeType = ""
-                        size = 0L
-                        modified = 0L
-                        isCollection = false
-                    }
-                    "displayname" -> displayName = parser.nextText()
-                    "getcontenttype" -> mimeType = parser.nextText()
-                    "getcontentlength" -> size = parser.nextText().toLongOrNull() ?: 0L
-                    "getlastmodified" -> modified = parseDate(parser.nextText())
-                    "collection" -> isCollection = true
-                }
-                XmlPullParser.END_TAG -> if (parser.name == "response" && !isCollection && displayName.isNotBlank()) {
-                    files.add(
-                        RemoteAlbumFile(
-                            name = displayName,
-                            displayName = displayName.replaceFirst(Regex("^\\d+-"), ""),
-                            mimeType = mimeType.substringBefore(';').ifBlank { "application/octet-stream" },
-                            size = size,
-                            lastModified = modified,
-                        ),
-                    )
-                }
-            }
-        }
-        return files
-    }
-
-    private fun parseDate(value: String): Long = try {
-        ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME.withLocale(Locale.US))
-            .toInstant().toEpochMilli()
-    } catch (_: Exception) {
-        0L
-    }
 }
