@@ -15,6 +15,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import androidx.core.net.toUri
 
 internal data class RemoteAlbum(
     val id: Int,
@@ -119,15 +120,13 @@ internal class AlbumDocumentsRepository(context: Context) {
     fun previewUrl(fileId: Long, etag: String, size: Int): String {
         val current = credential()
         val base = current.url.trimEnd('/') + "/api/image/preview/$fileId"
-        val builder = Uri.parse(base).buildUpon()
+        val builder = base.toUri().buildUpon()
             .appendQueryParameter("c", etag)
             .appendQueryParameter("x", size.toString())
             .appendQueryParameter("y", size.toString())
             .appendQueryParameter("a", "1")
         return builder.build().toString()
     }
-
-    fun authHeader(): String? = auth.authHeader()
 
     fun thumbnailCall(fileId: Long, etag: String, size: Int): Call =
         clients.client().newCall(request(previewUrl(fileId, etag, size), userAgent = null).get().build())

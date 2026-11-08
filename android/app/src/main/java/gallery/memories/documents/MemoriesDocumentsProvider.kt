@@ -312,7 +312,7 @@ class MemoriesDocumentsProvider : DocumentsProvider() {
         DocumentsContract.Document.COLUMN_MIME_TYPE to mimeType(file),
         DocumentsContract.Document.COLUMN_SIZE to file.size,
         DocumentsContract.Document.COLUMN_LAST_MODIFIED to file.lastModified,
-        DocumentsContract.Document.COLUMN_FLAGS to 0,
+        DocumentsContract.Document.COLUMN_FLAGS to DocumentsContract.Document.FLAG_SUPPORTS_THUMBNAIL,
     )
 
     private fun mimeType(file: RemoteAlbumFile): String {
