@@ -82,7 +82,7 @@ internal class AlbumDocumentsRepository(context: Context) {
             <?xml version="1.0" encoding="utf-8"?>
             <d:propfind xmlns:d="DAV:"><d:prop><d:displayname/><d:getcontenttype/><d:getcontentlength/><d:getlastmodified/><d:resourcetype/></d:prop></d:propfind>
         """.trimIndent().toRequestBody("application/xml; charset=utf-8".toMediaType())
-        val request = request(davUrl(current.url, path))
+        val request = request(davUrl(current.url, uid, path))
             .header("Depth", "1")
             .method("PROPFIND", body)
             .build()
@@ -100,7 +100,7 @@ internal class AlbumDocumentsRepository(context: Context) {
         val albumName = if (album.owner == uid) album.name else "${album.name} (${album.owner})"
         val path = "/photos/${encodeSegment(uid)}/$albumType/${encodeSegment(albumName)}/${encodeSegment(fileName)}"
         val client = clients.client().newBuilder().readTimeout(60, TimeUnit.SECONDS).build()
-        return client.newCall(request(davUrl(current.url, path)).get().build())
+        return client.newCall(request(davUrl(current.url, uid, path)).get().build())
     }
 
     private fun credential(): Credential {
@@ -121,8 +121,9 @@ internal class AlbumDocumentsRepository(context: Context) {
         .header("Authorization", auth.authHeader() ?: "")
         .header("OCS-APIREQUEST", "true")
 
-    private fun davUrl(baseUrl: String, path: String): String =
-        AssetCache.originOf(baseUrl) + AssetCache.webrootOf(baseUrl) + "/remote.php/dav" + path
+    private fun davUrl(baseUrl: String, uid: String, path: String): String =
+        AssetCache.originOf(baseUrl) + AssetCache.webrootOf(baseUrl) +
+            "/remote.php/dav/files/${encodeSegment(uid)}" + path
 
     private fun encodeSegment(segment: String): String = Uri.encode(segment)
 
