@@ -121,7 +121,7 @@ internal class AlbumDocumentsRepository(context: Context) {
         val current = credential()
         val fileId = file.fileId
         val etag = file.etag
-        val base = current.url.trimEnd('/') + "/apps/memories/api/image/preview/$fileId"
+        val base = current.url.trimEnd('/') + "/api/image/preview/$fileId"
         val builder = Uri.parse(base).buildUpon()
             .appendQueryParameter("c", etag)
             .appendQueryParameter("x", size.toString())
