@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.res.AssetFileDescriptor
 import android.database.Cursor
 import android.database.MatrixCursor
-import android.graphics.BitmapFactory
 import android.graphics.Point
 import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
@@ -13,10 +12,7 @@ import android.provider.DocumentsProvider
 import android.util.Base64
 import android.webkit.MimeTypeMap
 import gallery.memories.R
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONObject
-import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
 
@@ -208,9 +204,26 @@ class MemoriesDocumentsProvider : DocumentsProvider() {
             throw FileNotFoundException("Preview unavailable")
         }
         val target = maxOf(sizeHint?.x ?: 256, sizeHint?.y ?: 256, 256)
-        val tmp = repository.thumbnailFile(file, target)
-        val pfd = ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY)
-        return AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH)
+        val call = repository.thumbnailCall(file, target)
+        val pipe = ParcelFileDescriptor.createReliablePipe()
+        signal?.setOnCancelListener { call.cancel() }
+        Thread({
+            val output = ParcelFileDescriptor.AutoCloseOutputStream(pipe[1])
+            try {
+                call.execute().use { response ->
+                    if (!response.isSuccessful) throw IOException("Preview failed: HTTP ${response.code}")
+                    response.body.byteStream().use { input -> input.copyTo(output) }
+                }
+                output.close()
+            } catch (e: Exception) {
+                try {
+                    pipe[1].closeWithError(e.message ?: "Preview download failed")
+                } catch (_: Exception) {}
+            } finally {
+                signal?.setOnCancelListener(null)
+            }
+        }, "Memories thumbnail stream").start()
+        return AssetFileDescriptor(pipe[0], 0, AssetFileDescriptor.UNKNOWN_LENGTH)
     }
 
     private fun findAlbum(ref: DocumentRef): RemoteAlbum {

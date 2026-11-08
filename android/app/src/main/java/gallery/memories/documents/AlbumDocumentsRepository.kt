@@ -13,7 +13,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
-import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -132,16 +131,8 @@ internal class AlbumDocumentsRepository(context: Context) {
 
     fun authHeader(): String? = auth.authHeader()
 
-    fun thumbnailFile(file: RemoteAlbumFile, size: Int): File {
-        val request = request(previewUrl(file, size), userAgent = null).get().build()
-        clients.client().newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("Preview failed: HTTP ${response.code}")
-            val tmp = File.createTempFile("memories-thumb", ".bin", appContext.cacheDir)
-            tmp.deleteOnExit()
-            response.body.byteStream().use { input -> tmp.outputStream().use { out -> input.copyTo(out) } }
-            return tmp
-        }
-    }
+    fun thumbnailCall(file: RemoteAlbumFile, size: Int): Call =
+        clients.client().newCall(request(previewUrl(file, size), userAgent = null).get().build())
 
     private fun credential(): Credential {
         val current = credentials.getCredentials() ?: throw IOException("Sign in to Memories to browse albums")
