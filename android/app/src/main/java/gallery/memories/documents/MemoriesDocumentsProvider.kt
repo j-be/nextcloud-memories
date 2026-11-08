@@ -3,6 +3,9 @@ package gallery.memories.documents
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Point
 import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
@@ -10,6 +13,8 @@ import android.provider.DocumentsProvider
 import android.util.Base64
 import android.webkit.MimeTypeMap
 import gallery.memories.R
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.json.JSONObject
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -189,6 +194,30 @@ class MemoriesDocumentsProvider : DocumentsProvider() {
             }
         }, "Memories document stream").start()
         return pipe[0]
+    }
+
+    override fun openDocumentThumbnail(documentId: String, sizeHint: Point?, signal: CancellationSignal?): Bitmap {
+        val ref = parseDocumentId(documentId)
+        if (ref.type != TYPE_FILE) throw FileNotFoundException("Not a file")
+        requireCurrentAccount(ref)
+        val album = findAlbum(ref)
+        val file = repository.files(album).firstOrNull { it.name == ref.fileName }
+            ?: throw FileNotFoundException("Album item no longer exists")
+        if (file.fileId <= 0L || file.etag.isBlank()) {
+            throw FileNotFoundException("Preview unavailable")
+        }
+        val target = maxOf(sizeHint?.x ?: 256, sizeHint?.y ?: 256, 256)
+        val url = repository.previewUrl(file, target)
+        val request = Request.Builder().url(url)
+            .header("User-Agent", "Memories")
+            .header("Authorization", repository.authHeader())
+            .header("OCS-APIREQUEST", "true")
+            .get()
+            .build()
+        val response = OkHttpClient().newCall(request).execute()
+        if (!response.isSuccessful) throw FileNotFoundException("Preview failed: HTTP ${response.code}")
+        return response.body.byteStream().use { BitmapFactory.decodeStream(it) }
+            ?: throw FileNotFoundException("Preview decode failed")
     }
 
     private fun findAlbum(ref: DocumentRef): RemoteAlbum {

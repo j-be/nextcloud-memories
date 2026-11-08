@@ -24,6 +24,8 @@ internal data class RemoteAlbum(
 )
 
 internal data class RemoteAlbumFile(
+    val fileId: Long,
+    val etag: String,
     val name: String,
     val displayName: String,
     val mimeType: String,
@@ -111,7 +113,18 @@ internal class AlbumDocumentsRepository(context: Context) {
         val client = clients.client().newBuilder().readTimeout(60, TimeUnit.SECONDS).build()
         return client.newCall(request(davUrl(current.url, path)).get().build())
     }
-
+    fun previewUrl(file: RemoteAlbumFile, size: Int): String {
+        val current = credential()
+        val fileId = file.fileId
+        val etag = file.etag
+        val base = current.url.trimEnd('/') + "/apps/memories/api/image/preview/$fileId"
+        val builder = Uri.parse(base).buildUpon()
+            .appendQueryParameter("c", etag)
+            .appendQueryParameter("x", size.toString())
+            .appendQueryParameter("y", size.toString())
+            .appendQueryParameter("a", "1")
+        return builder.build().toString()
+    }
     private fun credential(): Credential {
         val current = credentials.getCredentials() ?: throw IOException("Sign in to Memories to browse albums")
         if (current != activeCredential) {
