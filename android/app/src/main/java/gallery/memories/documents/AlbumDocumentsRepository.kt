@@ -116,10 +116,8 @@ internal class AlbumDocumentsRepository(context: Context) {
         val client = clients.client().newBuilder().readTimeout(60, TimeUnit.SECONDS).build()
         return client.newCall(request(davUrl(current.url, path)).get().build())
     }
-    fun previewUrl(file: RemoteAlbumFile, size: Int): String {
+    fun previewUrl(fileId: Long, etag: String, size: Int): String {
         val current = credential()
-        val fileId = file.fileId
-        val etag = file.etag
         val base = current.url.trimEnd('/') + "/api/image/preview/$fileId"
         val builder = Uri.parse(base).buildUpon()
             .appendQueryParameter("c", etag)
@@ -131,8 +129,8 @@ internal class AlbumDocumentsRepository(context: Context) {
 
     fun authHeader(): String? = auth.authHeader()
 
-    fun thumbnailCall(file: RemoteAlbumFile, size: Int): Call =
-        clients.client().newCall(request(previewUrl(file, size), userAgent = null).get().build())
+    fun thumbnailCall(fileId: Long, etag: String, size: Int): Call =
+        clients.client().newCall(request(previewUrl(fileId, etag, size), userAgent = null).get().build())
 
     private fun credential(): Credential {
         val current = credentials.getCredentials() ?: throw IOException("Sign in to Memories to browse albums")

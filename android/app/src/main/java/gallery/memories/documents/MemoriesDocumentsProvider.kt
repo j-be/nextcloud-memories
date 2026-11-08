@@ -60,6 +60,8 @@ class MemoriesDocumentsProvider : DocumentsProvider() {
         val albumName: String,
         val owner: String,
         val fileName: String = "",
+        val fileId: Long = 0,
+        val etag: String = "",
     )
 
     override fun onCreate(): Boolean {
@@ -135,7 +137,7 @@ class MemoriesDocumentsProvider : DocumentsProvider() {
         val album = findAlbum(ref)
         try {
             repository.files(album).forEach { file ->
-                add(cursor.newRow(), cursor, fileValues(fileDocumentId(album, file.name), file))
+                add(cursor.newRow(), cursor, fileValues(fileDocumentId(album, file), file))
             }
         } catch (e: IOException) {
             cursor.close()
@@ -197,14 +199,11 @@ class MemoriesDocumentsProvider : DocumentsProvider() {
         val ref = parseDocumentId(documentId)
         if (ref.type != TYPE_FILE) throw FileNotFoundException("Not a file")
         requireCurrentAccount(ref)
-        val album = findAlbum(ref)
-        val file = repository.files(album).firstOrNull { it.name == ref.fileName }
-            ?: throw FileNotFoundException("Album item no longer exists")
-        if (file.fileId <= 0L || file.etag.isBlank()) {
+        if (ref.fileId <= 0L || ref.etag.isBlank()) {
             throw FileNotFoundException("Preview unavailable")
         }
         val target = maxOf(sizeHint?.x ?: 256, sizeHint?.y ?: 256, 256)
-        val call = repository.thumbnailCall(file, target)
+        val call = repository.thumbnailCall(ref.fileId, ref.etag, target)
         val pipe = ParcelFileDescriptor.createReliablePipe()
         signal?.setOnCancelListener { call.cancel() }
         Thread({
@@ -251,8 +250,18 @@ class MemoriesDocumentsProvider : DocumentsProvider() {
         DocumentRef(TYPE_ALBUM, repository.serverId(), repository.accountUid(), album.id, album.name, album.owner),
     )
 
-    private fun fileDocumentId(album: RemoteAlbum, fileName: String): String = encodeDocumentId(
-        DocumentRef(TYPE_FILE, repository.serverId(), repository.accountUid(), album.id, album.name, album.owner, fileName),
+    private fun fileDocumentId(album: RemoteAlbum, file: RemoteAlbumFile): String = encodeDocumentId(
+        DocumentRef(
+            TYPE_FILE,
+            repository.serverId(),
+            repository.accountUid(),
+            album.id,
+            album.name,
+            album.owner,
+            file.name,
+            file.fileId,
+            file.etag,
+        ),
     )
 
     private fun encodeDocumentId(ref: DocumentRef): String = Base64.encodeToString(
@@ -264,6 +273,8 @@ class MemoriesDocumentsProvider : DocumentsProvider() {
             .put("albumName", ref.albumName)
             .put("owner", ref.owner)
             .put("fileName", ref.fileName)
+            .put("fileId", ref.fileId)
+            .put("etag", ref.etag)
             .toString().toByteArray(),
         Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
     )
@@ -280,6 +291,8 @@ class MemoriesDocumentsProvider : DocumentsProvider() {
             albumName = json.getString("albumName"),
             owner = json.getString("owner"),
             fileName = json.optString("fileName"),
+            fileId = json.optLong("fileId"),
+            etag = json.optString("etag"),
         )
     } catch (e: Exception) {
         throw FileNotFoundException("Invalid document ID").also { it.initCause(e) }
