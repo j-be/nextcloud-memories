@@ -208,18 +208,7 @@ class MemoriesDocumentsProvider : DocumentsProvider() {
             throw FileNotFoundException("Preview unavailable")
         }
         val target = maxOf(sizeHint?.x ?: 256, sizeHint?.y ?: 256, 256)
-        val url = repository.previewUrl(file, target)
-        val builder = Request.Builder().url(url)
-            .header("User-Agent", "Memories")
-            .header("OCS-APIREQUEST", "true")
-            .get()
-        repository.authHeader()?.let { builder.header("Authorization", it) }
-        val request = builder.build()
-        val response = OkHttpClient().newCall(request).execute()
-        if (!response.isSuccessful) throw FileNotFoundException("Preview failed: HTTP ${response.code}")
-        val tmp = File.createTempFile("memories-thumb", ".bin", requireNotNull(context).cacheDir)
-        tmp.deleteOnExit()
-        response.body.byteStream().use { input -> tmp.outputStream().use { out -> input.copyTo(out) } }
+        val tmp = repository.thumbnailFile(file, target)
         val pfd = ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY)
         return AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH)
     }
